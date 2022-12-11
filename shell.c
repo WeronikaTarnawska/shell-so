@@ -30,6 +30,7 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
 
   for (int i = 0; i < ntokens; i++) {
     /* TODO: Handle tokens and open files as requested. */
+#ifdef STUDENT
     if (token[i] == T_OUTPUT) {
       *outputp = Open(token[i + 1], O_CREAT | O_RDWR, 00666);
       i++;
@@ -39,7 +40,6 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
     } else {
       n++;
     }
-#ifdef STUDENT
     (void)mode;
     (void)MaybeClose;
 #endif /* !STUDENT */
@@ -66,6 +66,7 @@ static int do_job(token_t *token, int ntokens, bool bg) {
   Sigprocmask(SIG_BLOCK, &sigchld_mask, &mask);
 
   /* TODO: Start a subprocess, create a job and monitor it. */
+#ifdef STUDENT
 
   pid_t pid = Fork();
   if (pid == 0) { // child
@@ -116,7 +117,6 @@ static int do_job(token_t *token, int ntokens, bool bg) {
       Close(output);
   }
 
-#ifdef STUDENT
 #endif /* !STUDENT */
 
   Sigprocmask(SIG_SETMASK, &mask, NULL);
@@ -209,7 +209,7 @@ static void eval(char *cmdline) {
 static char *readline(const char *prompt) {
   static char line[MAXLINE]; /* `readline` is clearly not reentrant! */
 
-  Write(STDOUT_FILENO, prompt, strlen(prompt));
+  write(STDOUT_FILENO, prompt, strlen(prompt));
 
   line[0] = '\0';
 

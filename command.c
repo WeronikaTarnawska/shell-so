@@ -111,8 +111,8 @@ noreturn void external_command(char **argv) {
   const char *path = getenv("PATH");
 
   if (!index(argv[0], '/') && path) {
-
-    /* DONE: For all paths in PATH construct an absolute path and execve it. */
+    /* TODO: For all paths in PATH construct an absolute path and execve it. */
+#ifdef STUDENT
     while (*path) {
       size_t len = strcspn(path, ":");
       char *abs_path = strndup(path, len);
@@ -123,7 +123,6 @@ noreturn void external_command(char **argv) {
     }
     /*==========================================*/
 
-#ifdef STUDENT
 #endif /* !STUDENT */
   } else {
     (void)execve(argv[0], argv, environ);
