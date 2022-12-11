@@ -30,6 +30,15 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
 
   for (int i = 0; i < ntokens; i++) {
     /* TODO: Handle tokens and open files as requested. */
+    if (token[i] == T_OUTPUT) {
+      *outputp = Open(token[i + 1], O_CREAT | O_RDWR, 00666);
+      i++;
+    } else if (token[i] == T_INPUT) {
+      *inputp = Open(token[i + 1], O_RDONLY, 0);
+      i++;
+    } else {
+      n++;
+    }
 #ifdef STUDENT
     (void)mode;
     (void)MaybeClose;
@@ -57,6 +66,53 @@ static int do_job(token_t *token, int ntokens, bool bg) {
   Sigprocmask(SIG_BLOCK, &sigchld_mask, &mask);
 
   /* TODO: Start a subprocess, create a job and monitor it. */
+
+  pid_t pid = Fork();
+  if (pid == 0) { // child
+
+    // tu trzeba dodać jakąś synchronizację bo się będą ścigać (aczkolwiek nie wygląda jakby się ścigały, why?????????????????????????)
+    // sigprocmask+sigsuspend ?
+    setpgid(getpid(), getpid());
+
+    // reset signal actions (czy aby na pewno?? ten sigint_handler na górze musi do czegoś słuzyć...)
+    Sigprocmask(SIG_SETMASK, &mask, NULL);
+    Signal(SIGINT, SIG_DFL);
+    Signal(SIGQUIT, SIG_DFL);
+    Signal(SIGTSTP, SIG_DFL);
+    Signal(SIGTTIN, SIG_DFL);
+    Signal(SIGTTOU, SIG_DFL);
+    Signal(SIGCHLD, SIG_DFL);
+
+    if (input >= 0) {
+      dup2(input, STDIN_FILENO);
+      close(input);
+    }
+    if (output >= 0) {
+      dup2(output, STDOUT_FILENO);
+      close(output);
+    }
+
+    // !!!!!!!!!!!
+    // zastopuj dziecko do czasu aż shell wejdzie do monitorjob
+    external_command(token);
+
+    perror("exec error :(");
+    exit(EXIT_FAILURE);
+  } else { // parent
+    setpgid(pid, pid);
+    int job = addjob(pid, bg);
+    addproc(job, pid, token);
+    if (!bg) {
+        // prekopiuj do numerka 0
+      monitorjob(&mask);
+    }
+    // Waitpid(pid, NULL, 0); // nie wiem czy potrzebne, raczej nie, torobi sigchild_handler
+    if (input > 0)
+      Close(input);
+    if (output > 0)
+      Close(output);
+  }
+
 #ifdef STUDENT
 #endif /* !STUDENT */
 
@@ -150,7 +206,7 @@ static void eval(char *cmdline) {
 static char *readline(const char *prompt) {
   static char line[MAXLINE]; /* `readline` is clearly not reentrant! */
 
-  write(STDOUT_FILENO, prompt, strlen(prompt));
+  Write(STDOUT_FILENO, prompt, strlen(prompt));
 
   line[0] = '\0';
 

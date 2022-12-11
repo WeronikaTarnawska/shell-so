@@ -26,6 +26,7 @@ static void sigchld_handler(int sig) {
   int status;
   /* TODO: Change state (FINISHED, RUNNING, STOPPED) of processes and jobs.
    * Bury all children that finished saving their status in jobs. */
+
 #ifdef STUDENT
   (void)status;
   (void)pid;
@@ -141,6 +142,7 @@ bool resumejob(int j, int bg, sigset_t *mask) {
     return false;
 
     /* TODO: Continue stopped job. Possibly move job to foreground slot. */
+
 #ifdef STUDENT
   (void)movejob;
 #endif /* !STUDENT */
@@ -180,6 +182,28 @@ int monitorjob(sigset_t *mask) {
   int exitcode = 0, state;
 
   /* TODO: Following code requires use of Tcsetpgrp of tty_fd. */
+  job_t *fj = &jobs[0];
+  Tcgetattr(tty_fd, &(fj->tmodes));
+  Tcsetpgrp(tty_fd, fj->pgid);
+  // kill(fj->pgid, jakiś sygnał że może przestać czekać i zacząć robić rzeczy)
+  // while(?){
+    int wstatus;
+  Waitpid(fj->pgid, &wstatus, WUNTRACED);
+  if(WIFSTOPPED(wstatus)){
+  // If it gets stopped move it to background.
+    fj->state = STOPPED;
+    int j = addjob(0, true);
+    movejob(0, j);
+  }
+  if(WIFEXITED(wstatus)){
+    fj->state = FINISHED;
+    deljob(fj);
+  }
+
+  // When a job has finished or has been stopped move shell to foreground.
+  Tcsetpgrp(tty_fd, getpid());
+  Tcsetattr(tty_fd, TCSADRAIN, &(fj->tmodes));
+
 #ifdef STUDENT
   (void)jobstate;
   (void)exitcode;
