@@ -187,15 +187,15 @@ int monitorjob(sigset_t *mask) {
   Tcsetpgrp(tty_fd, fj->pgid);
   // kill(fj->pgid, jakiś sygnał że może przestać czekać i zacząć robić rzeczy)
   // while(?){
-    int wstatus;
+  int wstatus;
   Waitpid(fj->pgid, &wstatus, WUNTRACED);
-  if(WIFSTOPPED(wstatus)){
-  // If it gets stopped move it to background.
+  if (WIFSTOPPED(wstatus)) {
+    // If it gets stopped move it to background.
     fj->state = STOPPED;
     int j = addjob(0, true);
     movejob(0, j);
   }
-  if(WIFEXITED(wstatus)){
+  if (WIFEXITED(wstatus)) {
     fj->state = FINISHED;
     deljob(fj);
   }

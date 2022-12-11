@@ -70,11 +70,13 @@ static int do_job(token_t *token, int ntokens, bool bg) {
   pid_t pid = Fork();
   if (pid == 0) { // child
 
-    // tu trzeba dodać jakąś synchronizację bo się będą ścigać (aczkolwiek nie wygląda jakby się ścigały, why?????????????????????????)
+    // tu trzeba dodać jakąś synchronizację bo się będą ścigać (aczkolwiek nie
+    // wygląda jakby się ścigały, why?????????????????????????)
     // sigprocmask+sigsuspend ?
     setpgid(getpid(), getpid());
 
-    // reset signal actions (czy aby na pewno?? ten sigint_handler na górze musi do czegoś słuzyć...)
+    // reset signal actions (czy aby na pewno?? ten sigint_handler na górze musi
+    // do czegoś słuzyć...)
     Sigprocmask(SIG_SETMASK, &mask, NULL);
     Signal(SIGINT, SIG_DFL);
     Signal(SIGQUIT, SIG_DFL);
@@ -103,10 +105,11 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     int job = addjob(pid, bg);
     addproc(job, pid, token);
     if (!bg) {
-        // prekopiuj do numerka 0
+      // prekopiuj do numerka 0
       monitorjob(&mask);
     }
-    // Waitpid(pid, NULL, 0); // nie wiem czy potrzebne, raczej nie, torobi sigchild_handler
+    // Waitpid(pid, NULL, 0); // nie wiem czy potrzebne, raczej nie, torobi
+    // sigchild_handler
     if (input > 0)
       Close(input);
     if (output > 0)
