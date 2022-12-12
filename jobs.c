@@ -27,7 +27,60 @@ static void sigchld_handler(int sig) {
   /* TODO: Change state (FINISHED, RUNNING, STOPPED) of processes and jobs.
    * Bury all children that finished saving their status in jobs. */
 #ifdef STUDENT
+  //   sigset_t mask;
+  //   Sigprocmask(SIG_BLOCK, &sigchld_mask, &mask);
+  for (int i = BG; i < njobmax; i++) {
+    job_t *j = &jobs[i];
 
+    // safe_printf("sigchild handler: watching job: pgid %d, nproc %d, state %d,
+    // "
+    //             "command %s\n",
+    //             j->pgid, j->nproc, j->state, j->command);
+
+    if (j->pgid == 0)
+      continue;
+    pid = waitpid(j->pgid, &status, WNOHANG | WUNTRACED | WCONTINUED);
+    // pid = Waitpid(WAIT_ANY, &status, WNOHANG | WUNTRACED);
+    // safe_printf("sigchild handler, job %d, searched pid %d, got pid %d\n", i,
+    //             j->pgid, pid);
+    if (pid <= 0)
+      continue;
+    if (WIFSTOPPED(status)) {
+      //   safe_printf("[%d] stopped\n", j->pgid);
+      j->state = STOPPED;
+      for (int ii = 0; ii < j->nproc; ii++) {
+        j->proc[ii].state = STOPPED;
+      }
+    }
+    if (WIFCONTINUED(status)) {
+      //   safe_printf("[%d] resumed\n", j->pgid);
+      j->state = RUNNING;
+      for (int ii = 0; ii < j->nproc; ii++) {
+        j->proc[ii].state = RUNNING;
+      }
+    }
+    if (WIFEXITED(status)) {
+      //   safe_printf("[%d] exited\n", j->pgid);
+      j->state = FINISHED;
+      j->pgid = 0;
+      for (int ii = 0; ii < j->nproc; ii++) {
+        j->proc[ii].state = FINISHED;
+        j->proc[ii].exitcode = WEXITSTATUS(status);
+      }
+      //   deljob(j);
+    }
+    if (WIFSIGNALED(status)) {
+      //   safe_printf("[%d] terminated by signal %d\n", j->pgid,
+      //   WTERMSIG(status));
+      j->state = FINISHED;
+      j->pgid = 0;
+      for (int ii = 0; ii < j->nproc; ii++) {
+        j->proc[ii].state = FINISHED;
+        j->proc[ii].exitcode = WTERMSIG(status);
+      }
+    }
+  }
+  //   Sigprocmask(SIG_SETMASK, &mask, NULL);
   (void)status;
   (void)pid;
 #endif /* !STUDENT */
@@ -118,6 +171,10 @@ static int jobstate(int j, int *statusp) {
 
   /* TODO: Handle case where job has finished. */
 #ifdef STUDENT
+  if (job->state == FINISHED) {
+    *statusp = job->proc->exitcode;
+    deljob(job);
+  }
   (void)exitcode;
 #endif /* !STUDENT */
 
@@ -143,7 +200,12 @@ bool resumejob(int j, int bg, sigset_t *mask) {
 
     /* TODO: Continue stopped job. Possibly move job to foreground slot. */
 #ifdef STUDENT
-
+  job_t *job = &jobs[j];
+  job->state = RUNNING;
+  if (!bg) {
+    movejob(j, 0);
+  }
+  Kill(-job->pgid, SIGCONT);
   (void)movejob;
 #endif /* !STUDENT */
 
@@ -158,6 +220,7 @@ bool killjob(int j) {
 
   /* TODO: I love the smell of napalm in the morning. */
 #ifdef STUDENT
+  Kill(-jobs[j].pgid, SIGTERM);
 #endif /* !STUDENT */
 
   return true;
@@ -171,6 +234,12 @@ void watchjobs(int which) {
 
       /* TODO: Report job number, state, command and exit code or signal. */
 #ifdef STUDENT
+    int s = jobs[j].state;
+    if (s == which) {
+      // safe_printf("job number: %d, state: %s, command: %s, exit code: %d\n",
+      // j, s==RUNNING ? "RUNNING" : s==STOPPED ? "STOPPED" : "FINISHED",
+      // jobs[j].command, jobs[j].proc->exitcode);
+    }
     (void)deljob;
 #endif /* !STUDENT */
   }
@@ -186,20 +255,30 @@ int monitorjob(sigset_t *mask) {
   job_t *fj = &jobs[0];
   Tcgetattr(tty_fd, &(fj->tmodes));
   Tcsetpgrp(tty_fd, fj->pgid);
-  // kill(fj->pgid, jakiś sygnał że może przestać czekać i zacząć robić rzeczy)
-  // while(?){
+
+  //   Sigprocmask(SIG_BLOCK, &sigchld_mask, NULL);
+
   int wstatus;
   Waitpid(fj->pgid, &wstatus, WUNTRACED);
   if (WIFSTOPPED(wstatus)) {
     // If it gets stopped move it to background.
+    // safe_printf("fg job stopped\n");
     fj->state = STOPPED;
     int j = addjob(0, true);
     movejob(0, j);
   }
   if (WIFEXITED(wstatus)) {
+    // safe_printf("fg job exited\n");
     fj->state = FINISHED;
     deljob(fj);
   }
+  if (WIFSIGNALED(wstatus)) {
+    // safe_printf("fg job killed by signal %d\n", WTERMSIG(wstatus));
+    fj->state = FINISHED;
+    deljob(fj);
+  }
+
+  Sigprocmask(SIG_SETMASK, mask, NULL);
 
   // When a job has finished or has been stopped move shell to foreground.
   Tcsetpgrp(tty_fd, getpid());
@@ -248,6 +327,19 @@ void shutdownjobs(void) {
 
   /* TODO: Kill remaining jobs and wait for them to finish. */
 #ifdef STUDENT
+  for (int i = 0; i < njobmax; i++) {
+    if (jobs[i].pgid > 0) {
+      //   safe_printf("trying to kill %d\n", jobs[i].pgid);
+      killjob(i);
+      //   perror("shutdownjobs, kill ");
+      jobs[i].state = FINISHED;
+      if (Waitpid(WAIT_ANY, NULL, 0) == 0) {
+        // perror("shutdownjobs, waitpid ");
+      }
+      //   safe_printf("killed %d\n", jobs[i].pgid);
+      deljob(&jobs[i]);
+    }
+  }
 #endif /* !STUDENT */
 
   watchjobs(FINISHED);

@@ -121,7 +121,6 @@ noreturn void external_command(char **argv) {
       execve(abs_path, argv, environ);
       path += len + 1;
     }
-    /*==========================================*/
 
 #endif /* !STUDENT */
   } else {

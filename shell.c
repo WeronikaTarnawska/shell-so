@@ -70,14 +70,30 @@ static int do_job(token_t *token, int ntokens, bool bg) {
 
   pid_t pid = Fork();
   if (pid == 0) { // child
-
-    // tu trzeba dodać jakąś synchronizację bo się będą ścigać (aczkolwiek nie
-    // wygląda jakby się ścigały, why?????????????????????????)
-    // sigprocmask+sigsuspend ?
     setpgid(getpid(), getpid());
 
-    // reset signal actions (czy aby na pewno?? ten sigint_handler na górze musi
-    // do czegoś słuzyć...)
+    if (input >= 0) {
+      dup2(input, STDIN_FILENO);
+      perror("dup error :(");
+      close(input);
+    }
+    if (output >= 0) {
+      dup2(output, STDOUT_FILENO);
+      perror("dup error :(");
+      close(output);
+    }
+
+    // !!!!!!!!!!!
+    // suspend the child until shell gives it control over terminal
+    // if (!bg) {
+    //   sigset_t sigint_mask;
+    //   sigfillset(&sigint_mask);
+    //   sigdelset(&sigint_mask, SIGINT);
+    //   Signal(SIGINT, sigint_handler);
+    //   Sigsuspend(&sigint_mask);
+    // }
+
+    // reset signal actions
     Sigprocmask(SIG_SETMASK, &mask, NULL);
     Signal(SIGINT, SIG_DFL);
     Signal(SIGQUIT, SIG_DFL);
@@ -85,18 +101,8 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     Signal(SIGTTIN, SIG_DFL);
     Signal(SIGTTOU, SIG_DFL);
     Signal(SIGCHLD, SIG_DFL);
-
-    if (input >= 0) {
-      dup2(input, STDIN_FILENO);
-      close(input);
-    }
-    if (output >= 0) {
-      dup2(output, STDOUT_FILENO);
-      close(output);
-    }
-
-    // !!!!!!!!!!!
-    // zastopuj dziecko do czasu aż shell wejdzie do monitorjob
+    // Signal(SIGCONT, SIG_DFL);
+    // Signal(SIGTERM, SIG_DFL);
     external_command(token);
 
     perror("exec error :(");
@@ -106,7 +112,6 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     int job = addjob(pid, bg);
     addproc(job, pid, token);
     if (!bg) {
-      // prekopiuj do numerka 0
       monitorjob(&mask);
     }
     // Waitpid(pid, NULL, 0); // nie wiem czy potrzebne, raczej nie, torobi
