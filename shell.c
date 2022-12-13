@@ -131,9 +131,8 @@ static int do_job(token_t *token, int ntokens, bool bg) {
   return exitcode;
 }
 
-/* Start internal or external command in a subprocess that belongs to
- * pipeline. All subprocesses in pipeline must belong to the same process
- * group. */
+/* Start internal or external command in a subprocess that belongs to pipeline.
+ * All subprocesses in pipeline must belong to the same process group. */
 static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
                       token_t *token, int ntokens, bool bg) {
   ntokens = do_redir(token, ntokens, &input, &output);
