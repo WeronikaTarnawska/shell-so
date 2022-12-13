@@ -120,6 +120,7 @@ noreturn void external_command(char **argv) {
       strapp(&abs_path, argv[0]);
       execve(abs_path, argv, environ);
       path += len + 1;
+      free(abs_path);
     }
 
 #endif /* !STUDENT */

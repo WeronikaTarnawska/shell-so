@@ -31,8 +31,11 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
   for (int i = 0; i < ntokens; i++) {
     /* TODO: Handle tokens and open files as requested. */
 #ifdef STUDENT
-    if (token[i] == T_OUTPUT) {
-      *outputp = Open(token[i + 1], O_CREAT | O_RDWR, 00666);
+    if (token[i] == T_OUTPUT && token[i + 1] == T_OUTPUT) {
+      *outputp = Open(token[i + 2], O_APPEND | O_CREAT | O_WRONLY, 00666);
+      i += 2;
+    } else if (token[i] == T_OUTPUT) {
+      *outputp = Open(token[i + 1], O_CREAT | O_TRUNC | O_WRONLY, 00666);
       i++;
     } else if (token[i] == T_INPUT) {
       *inputp = Open(token[i + 1], O_RDONLY, 0);
@@ -72,14 +75,14 @@ static int do_job(token_t *token, int ntokens, bool bg) {
   if (pid == 0) { // child
     setpgid(getpid(), getpid());
 
-    if (input >= 0) {
-      dup2(input, STDIN_FILENO);
-      perror("dup error :(");
+    if (input != -1) {
+      if (dup2(input, STDIN_FILENO) < 0)
+        perror("dup error :( ");
       close(input);
     }
-    if (output >= 0) {
-      dup2(output, STDOUT_FILENO);
-      perror("dup error :(");
+    if (output != -1) {
+      if (dup2(output, STDOUT_FILENO) < 0)
+        perror("dup error :( ");
       close(output);
     }
 
@@ -96,11 +99,11 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     // reset signal actions
     Sigprocmask(SIG_SETMASK, &mask, NULL);
     Signal(SIGINT, SIG_DFL);
-    Signal(SIGQUIT, SIG_DFL);
     Signal(SIGTSTP, SIG_DFL);
     Signal(SIGTTIN, SIG_DFL);
     Signal(SIGTTOU, SIG_DFL);
     Signal(SIGCHLD, SIG_DFL);
+    Signal(SIGQUIT, SIG_DFL);
     // Signal(SIGCONT, SIG_DFL);
     // Signal(SIGTERM, SIG_DFL);
     external_command(token);
@@ -112,13 +115,11 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     int job = addjob(pid, bg);
     addproc(job, pid, token);
     if (!bg) {
-      monitorjob(&mask);
+      exitcode = monitorjob(&mask);
     }
-    // Waitpid(pid, NULL, 0); // nie wiem czy potrzebne, raczej nie, torobi
-    // sigchild_handler
-    if (input > 0)
+    if (input != -1)
       Close(input);
-    if (output > 0)
+    if (output != -1)
       Close(output);
   }
 
@@ -128,8 +129,9 @@ static int do_job(token_t *token, int ntokens, bool bg) {
   return exitcode;
 }
 
-/* Start internal or external command in a subprocess that belongs to pipeline.
- * All subprocesses in pipeline must belong to the same process group. */
+/* Start internal or external command in a subprocess that belongs to
+ * pipeline. All subprocesses in pipeline must belong to the same process
+ * group. */
 static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
                       token_t *token, int ntokens, bool bg) {
   ntokens = do_redir(token, ntokens, &input, &output);
@@ -171,6 +173,27 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   /* TODO: Start pipeline subprocesses, create a job and monitor it.
    * Remember to close unused pipe ends! */
 #ifdef STUDENT
+  //   pgid = Fork();
+
+  //   if (pgid == 0) {
+  //     // child
+  //     // start pipeline subprocesses
+  //     token_t tok2;
+  //     for (int t = 0; t < ntokens; t++) {
+  //       if (token[t] == T_PIPE) {
+  //         // pgid ??
+  //         // kiedy robimy forka ??
+  //         do_stage(pgid, &mask, input, output, token, t, bg);
+  //       }
+  //     }
+
+  //   } else {
+  //     // parent (shell)
+  //     // create a job and monitor it
+  //     int j = addjob(pid, bg);
+  //     addproc(j, pid, token);
+  //   }
+
   (void)input;
   (void)job;
   (void)pid;
@@ -214,7 +237,7 @@ static void eval(char *cmdline) {
 static char *readline(const char *prompt) {
   static char line[MAXLINE]; /* `readline` is clearly not reentrant! */
 
-  write(STDOUT_FILENO, prompt, strlen(prompt));
+  Write(STDOUT_FILENO, prompt, strlen(prompt));
 
   line[0] = '\0';
 
