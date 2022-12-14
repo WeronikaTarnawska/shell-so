@@ -253,10 +253,11 @@ void watchjobs(int which) {
       /* TODO: Report job number, state, command and exit code or signal. */
 #ifdef STUDENT
     int s = jobs[j].state;
-    if (which == ALL || which == j || which == FINISHED) {
+    if (which == ALL || which == j) {
       //   safe_printf(
-      //     "watchjobs: job number: %d, state: %s, command: %s, exit code:
-      //     %d\n", j, s == RUNNING   ? "RUNNING" : s == STOPPED ? "STOPPED"
+      //     "watchjobs: job number: %d, state: %s, command: %s, exit
+      //     code:%d\n", j, s == RUNNING   ? "RUNNING" : s == STOPPED ?
+      //     "STOPPED"
       //                    : "FINISHED",
       //     jobs[j].command, jobs[j].proc->exitcode);
       if (s == RUNNING)
@@ -266,8 +267,11 @@ void watchjobs(int which) {
       else if (s == FINISHED)
         safe_printf("[%d] exited '%s'\n", j, jobs[j].command);
     }
-    if (s == FINISHED)
+    if (s == FINISHED) {
       deljob(&jobs[j]);
+      if (which == s)
+        safe_printf("[%d] exited '%s'\n", j, jobs[j].command);
+    }
     (void)deljob;
 #endif /* !STUDENT */
   }
