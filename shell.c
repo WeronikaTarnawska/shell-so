@@ -70,10 +70,27 @@ static int do_job(token_t *token, int ntokens, bool bg) {
 
   /* TODO: Start a subprocess, create a job and monitor it. */
 #ifdef STUDENT
-
   pid_t pid = Fork();
   if (pid == 0) { // child
-    setpgid(getpid(), getpid());
+
+    setpgid(pid, pid);
+
+    // sigset_t mask2, sigint_mask;
+    // sigemptyset(&sigint_mask);
+    // sigaddset(&sigint_mask, SIGINT);
+    // Sigprocmask(SIG_BLOCK, &sigint_mask, &mask2);
+    // Sigsuspend(&mask2);
+
+    // reset signal actions
+    Sigprocmask(SIG_SETMASK, &mask, NULL);
+    Signal(SIGINT, SIG_DFL);
+    Signal(SIGTSTP, SIG_DFL);
+    Signal(SIGTTIN, SIG_DFL);
+    Signal(SIGTTOU, SIG_DFL);
+    Signal(SIGCHLD, SIG_DFL);
+    Signal(SIGQUIT, SIG_DFL);
+    // Signal(SIGCONT, SIG_DFL);
+    // Signal(SIGTERM, SIG_DFL);
 
     if (input != -1) {
       if (dup2(input, STDIN_FILENO) < 0)
@@ -86,39 +103,22 @@ static int do_job(token_t *token, int ntokens, bool bg) {
       close(output);
     }
 
-    // !!!!!!!!!!!
-    // suspend the child until shell gives it control over terminal
-    // if (!bg) {
-    //   sigset_t sigint_mask;
-    //   sigfillset(&sigint_mask);
-    //   sigdelset(&sigint_mask, SIGINT);
-    //   Signal(SIGINT, sigint_handler);
-    //   Sigsuspend(&sigint_mask);
-    // }
-
-    // reset signal actions
-    Sigprocmask(SIG_SETMASK, &mask, NULL);
-    Signal(SIGINT, SIG_DFL);
-    Signal(SIGTSTP, SIG_DFL);
-    Signal(SIGTTIN, SIG_DFL);
-    Signal(SIGTTOU, SIG_DFL);
-    Signal(SIGCHLD, SIG_DFL);
-    Signal(SIGQUIT, SIG_DFL);
-    // Signal(SIGCONT, SIG_DFL);
-    // Signal(SIGTERM, SIG_DFL);
     external_command(token);
-
     perror("exec error :(");
     exit(EXIT_FAILURE);
+
   } else { // parent
     setpgid(pid, pid);
     int job = addjob(pid, bg);
     addproc(job, pid, token);
+    // kill(-pid, SIGINT);
+
     if (!bg) {
       exitcode = monitorjob(&mask);
     } else {
       watchjobs(job);
     }
+
     if (input != -1)
       Close(input);
     if (output != -1)
