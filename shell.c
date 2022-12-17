@@ -294,7 +294,7 @@ static void eval(char *cmdline) {
 static char *readline(const char *prompt) {
   static char line[MAXLINE]; /* `readline` is clearly not reentrant! */
 
-  Write(STDOUT_FILENO, prompt, strlen(prompt));
+  write(STDOUT_FILENO, prompt, strlen(prompt));
 
   line[0] = '\0';
 
