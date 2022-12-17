@@ -27,55 +27,48 @@ static void sigchld_handler(int sig) {
   /* TODO: Change state (FINISHED, RUNNING, STOPPED) of processes and jobs.
    * Bury all children that finished saving their status in jobs. */
 #ifdef STUDENT
-  //   sigset_t mask;
-  //   Sigprocmask(SIG_BLOCK, &sigchld_mask, &mask);
   for (int i = BG; i < njobmax; i++) {
     job_t *j = &jobs[i];
-
     if (j->pgid == 0)
       continue;
-    pid = waitpid(-j->pgid, &status, WNOHANG | WUNTRACED | WCONTINUED);
-    // safe_printf("sigchild handler, job %d, searched pid %d, got pid %d\n", i,
-    //             j->pgid, pid);
-    if (pid <= 0)
-      continue;
-    if (WIFSTOPPED(status)) {
-      //   safe_printf("[%d] stopped\n", j->pgid);
-      j->state = STOPPED;
-      for (int ii = 0; ii < j->nproc; ii++) {
-        j->proc[ii].state = STOPPED;
+    for (int p = 0; p < j->nproc; p++) {
+      pid = waitpid(j->proc[p].pid, &status, WNOHANG | WUNTRACED | WCONTINUED);
+      // safe_printf("sigchild handler, job %d, searched pid %d, got pid %d\n",
+      // i,
+      //             j->pgid, pid);
+      if (pid <= 0)
+        continue;
+      if (WIFSTOPPED(status)) {
+        //   safe_printf("[%d] stopped\n", j->pgid);
+        j->state = STOPPED;
+        j->proc[p].state = STOPPED;
+      } else if (WIFCONTINUED(status)) {
+        //   safe_printf("[%d] resumed\n", j->pgid);
+        j->state = RUNNING;
+        j->proc[p].state = RUNNING;
+      } else if (WIFEXITED(status) || WIFSIGNALED(status)) {
+        //   safe_printf("[%d] exited '%s', status=%d\n", i, j->command,
+        //               WEXITSTATUS(status));
+        j->proc[p].state = FINISHED;
+        j->proc[p].exitcode = status;
+        int done = 0;
+        for (int k = 0; k < j->nproc; k++)
+          if (j->proc[k].state == FINISHED)
+            done++;
+        if (done == j->nproc)
+          j->state = FINISHED;
       }
-    }
-    if (WIFCONTINUED(status)) {
-      //   safe_printf("[%d] resumed\n", j->pgid);
-      j->state = RUNNING;
-      for (int ii = 0; ii < j->nproc; ii++) {
-        j->proc[ii].state = RUNNING;
-      }
-    }
-    if (WIFEXITED(status)) {
-      //   safe_printf("[%d] exited '%s', status=%d\n", i, j->command,
-      //               WEXITSTATUS(status));
-      j->state = FINISHED;
-      for (int ii = 0; ii < j->nproc; ii++) {
-        j->proc[ii].state = FINISHED;
-        j->proc[ii].exitcode = status;
-      }
-      //   deljob(j);
-    }
-    if (WIFSIGNALED(status)) {
-      //   safe_printf("[%d] terminated by signal %d\n", j->pgid,
-      //   WTERMSIG(status));
-      //   safe_printf("[%d] killed '%s' by signal %d\n", i, j->command,
-      //   WTERMSIG(status));
-      j->state = FINISHED;
-      for (int ii = 0; ii < j->nproc; ii++) {
-        j->proc[ii].state = FINISHED;
-        j->proc[ii].exitcode = status;
-      }
+    //    else if (WIFSIGNALED(status)) {
+    //     //   safe_printf("[%d] terminated by signal %d\n", j->pgid,
+    //     //   WTERMSIG(status));
+    //     //   safe_printf("[%d] killed '%s' by signal %d\n", i, j->command,
+    //     //   WTERMSIG(status));
+    //     j->state = FINISHED;
+    //     j->proc[p].state = FINISHED;
+    //     j->proc[p].exitcode = status;
+    //   }
     }
   }
-  //   Sigprocmask(SIG_SETMASK, &mask, NULL);
   (void)status;
   (void)pid;
 #endif /* !STUDENT */
