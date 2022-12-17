@@ -33,12 +33,19 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
 #ifdef STUDENT
     if (token[i] == T_OUTPUT && token[i + 1] == T_OUTPUT) {
       *outputp = Open(token[i + 2], O_APPEND | O_CREAT | O_WRONLY, 00666);
+      //   token[i] = T_NULL;
+      //   token[i + 1] = T_NULL;
+      //   token[i + 2] = T_NULL;
       i += 2;
     } else if (token[i] == T_OUTPUT) {
       *outputp = Open(token[i + 1], O_CREAT | O_TRUNC | O_WRONLY, 00666);
+      //   token[i] = T_NULL;
+      //   token[i + 1] = T_NULL;
       i++;
     } else if (token[i] == T_INPUT) {
       *inputp = Open(token[i + 1], O_RDONLY, 0);
+      //   token[i] = T_NULL;
+      //   token[i + 1] = T_NULL;
       i++;
     } else {
       n++;
@@ -73,7 +80,7 @@ static int do_job(token_t *token, int ntokens, bool bg) {
   pid_t pid = Fork();
   if (pid == 0) { // child
 
-    setpgid(pid, pid);
+    setpgid(getpid(), getpid());
 
     // sigset_t mask2, sigint_mask;
     // sigemptyset(&sigint_mask);
@@ -89,18 +96,14 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     Signal(SIGTTOU, SIG_DFL);
     Signal(SIGCHLD, SIG_DFL);
     Signal(SIGQUIT, SIG_DFL);
-    // Signal(SIGCONT, SIG_DFL);
-    // Signal(SIGTERM, SIG_DFL);
 
     if (input != -1) {
-      if (dup2(input, STDIN_FILENO) < 0)
-        perror("dup error :( ");
-      close(input);
+      Dup2(input, STDIN_FILENO);
+      MaybeClose(&input);
     }
     if (output != -1) {
-      if (dup2(output, STDOUT_FILENO) < 0)
-        perror("dup error :( ");
-      close(output);
+      Dup2(output, STDOUT_FILENO);
+      MaybeClose(&output);
     }
 
     external_command(token);
@@ -111,18 +114,15 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     setpgid(pid, pid);
     int job = addjob(pid, bg);
     addproc(job, pid, token);
-    // kill(-pid, SIGINT);
 
     if (!bg) {
       exitcode = monitorjob(&mask);
     } else {
-      watchjobs(job);
+      safe_printf("[%d] running '%s'\n", job, jobcmd(job));
     }
 
-    if (input != -1)
-      Close(input);
-    if (output != -1)
-      Close(output);
+    MaybeClose(&input);
+    MaybeClose(&output);
   }
 
 #endif /* !STUDENT */
@@ -143,6 +143,42 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
   /* TODO: Start a subprocess and make sure it's moved to a process group. */
   pid_t pid = Fork();
 #ifdef STUDENT
+  if (pid == 0) { // child
+    if (pgid > 0)
+      setpgid(getpid(), pgid);
+    else
+      setpgid(getpid(), getpid());
+
+    Sigprocmask(SIG_SETMASK, mask, NULL);
+    Signal(SIGINT, SIG_DFL);
+    Signal(SIGTSTP, SIG_DFL);
+    Signal(SIGTTIN, SIG_DFL);
+    Signal(SIGTTOU, SIG_DFL);
+    Signal(SIGCHLD, SIG_DFL);
+    Signal(SIGQUIT, SIG_DFL);
+
+    if (input != -1) {
+      Dup2(input, STDIN_FILENO);
+      MaybeClose(&input);
+    }
+    if (output != -1) {
+      Dup2(output, STDOUT_FILENO);
+      MaybeClose(&output);
+    }
+    // sleep(1);
+    external_command(token);
+    perror("exec error :(");
+    exit(EXIT_FAILURE);
+
+  } else { // parent
+    if (pgid > 0)
+      setpgid(pid, pgid);
+    else {
+      setpgid(pid, pid);
+      //   setfgpgrp(pid);
+    }
+  }
+
 #endif /* !STUDENT */
 
   return pid;
@@ -174,26 +210,46 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   /* TODO: Start pipeline subprocesses, create a job and monitor it.
    * Remember to close unused pipe ends! */
 #ifdef STUDENT
-  //   pgid = Fork();
+  int x[MAXLINE / 2], nproc = 0;
+  x[0] = -1;
+  for (int i = 0; i < ntokens; i++) {
+    if (token[i] == T_PIPE) {
+      token[i] = T_NULL;
+      nproc += 1;
+      x[nproc] = i;
+    }
+  }
+  /* first process - group leader */
+  pid = do_stage(-1, &mask, input, output, token, x[1], bg);
+  pgid = pid;
+  job = addjob(pgid, bg);
+  addproc(job, pid, token);
+  //   safe_printf("cmd: %s\n", jobcmd(job));
+  /* middle processes */
+  for (int p = 1; p < nproc; p++) {
+    MaybeClose(&input);
+    input = next_input;
+    MaybeClose(&output);
+    mkpipe(&next_input, &output);
+    pid = do_stage(pgid, &mask, input, output, token + x[p] + 1,
+                   x[p + 1] - x[p] - 1, bg);
+    addproc(job, pid, token + x[p] + 1);
+    // safe_printf("cmd: %s\n", jobcmd(job));
+  }
+  /* last process */
+  MaybeClose(&input);
+  input = next_input;
+  MaybeClose(&output);
+  pid = do_stage(pgid, &mask, input, output, token + x[nproc] + 1,
+                 ntokens - x[nproc] - 1, bg);
+  addproc(job, pid, token + x[nproc] + 1);
+  //   safe_printf("cmd: %s\n", jobcmd(job));
 
-  //   if (pgid == 0) {
-  //     // child
-  //     // start pipeline subprocesses
-  //     token_t tok2;
-  //     for (int t = 0; t < ntokens; t++) {
-  //       if (token[t] == T_PIPE) {
-  //         // pgid ??
-  //         // kiedy robimy forka ??
-  //         do_stage(pgid, &mask, input, output, token, t, bg);
-  //       }
-  //     }
-
-  //   } else {
-  //     // parent (shell)
-  //     // create a job and monitor it
-  //     int j = addjob(pid, bg);
-  //     addproc(j, pid, token);
-  //   }
+  if (!bg) {
+    exitcode = monitorjob(&mask);
+  } else {
+    safe_printf("[%d] running '%s'\n", job, jobcmd(job));
+  }
 
   (void)input;
   (void)job;
@@ -238,7 +294,7 @@ static void eval(char *cmdline) {
 static char *readline(const char *prompt) {
   static char line[MAXLINE]; /* `readline` is clearly not reentrant! */
 
-  write(STDOUT_FILENO, prompt, strlen(prompt));
+  Write(STDOUT_FILENO, prompt, strlen(prompt));
 
   line[0] = '\0';
 
