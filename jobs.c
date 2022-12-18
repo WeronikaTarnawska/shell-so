@@ -32,7 +32,7 @@ static void sigchld_handler(int sig) {
     if (j->pgid == 0)
       continue;
     for (int p = 0; p < j->nproc; p++) {
-      pid = Waitpid(j->proc[p].pid, &status, WNOHANG | WUNTRACED | WCONTINUED);
+      pid = waitpid(j->proc[p].pid, &status, WNOHANG | WUNTRACED | WCONTINUED);
       //   safe_printf("sigchild handler, job %d, searched pid %d, got pid
       //   %d\n", i,
       //               j->pgid, pid);
