@@ -81,7 +81,8 @@ static int do_job(token_t *token, int ntokens, bool bg) {
   if (pid == 0) { // child
 
     setpgid(getpid(), getpid());
-
+    if (!bg)
+      setfgpgrp(getpid());
     // sigset_t mask2, sigint_mask;
     // sigemptyset(&sigint_mask);
     // sigaddset(&sigint_mask, SIGINT);
@@ -112,6 +113,8 @@ static int do_job(token_t *token, int ntokens, bool bg) {
 
   } else { // parent
     setpgid(pid, pid);
+    if (!bg)
+      setfgpgrp(pid);
     int job = addjob(pid, bg);
     addproc(job, pid, token);
 
@@ -146,8 +149,11 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
   if (pid == 0) { // child
     if (pgid > 0)
       setpgid(getpid(), pgid);
-    else
+    else {
       setpgid(getpid(), getpid());
+      if (!bg)
+        setfgpgrp(getpid());
+    }
 
     Sigprocmask(SIG_SETMASK, mask, NULL);
     Signal(SIGINT, SIG_DFL);
@@ -165,7 +171,6 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
       Dup2(output, STDOUT_FILENO);
       MaybeClose(&output);
     }
-    // sleep(1);
     external_command(token);
     perror("exec error :(");
     exit(EXIT_FAILURE);
@@ -175,7 +180,8 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
       setpgid(pid, pgid);
     else {
       setpgid(pid, pid);
-      //   setfgpgrp(pid);
+      if (!bg)
+        setfgpgrp(pid);
     }
   }
 
@@ -228,8 +234,8 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   /* middle processes */
   for (int p = 1; p < nproc; p++) {
     MaybeClose(&input);
-    input = next_input;
     MaybeClose(&output);
+    input = next_input;
     mkpipe(&next_input, &output);
     pid = do_stage(pgid, &mask, input, output, token + x[p] + 1,
                    x[p + 1] - x[p] - 1, bg);
@@ -238,13 +244,14 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   }
   /* last process */
   MaybeClose(&input);
-  input = next_input;
   MaybeClose(&output);
+  input = next_input;
   pid = do_stage(pgid, &mask, input, output, token + x[nproc] + 1,
                  ntokens - x[nproc] - 1, bg);
   addproc(job, pid, token + x[nproc] + 1);
   //   safe_printf("cmd: %s\n", jobcmd(job));
-
+  MaybeClose(&input);
+  MaybeClose(&output);
   if (!bg) {
     exitcode = monitorjob(&mask);
   } else {
