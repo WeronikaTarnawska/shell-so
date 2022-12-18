@@ -1,3 +1,4 @@
+#define READLINE 2137
 #ifdef READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -286,7 +287,7 @@ static void eval(char *cmdline) {
 static char *readline(const char *prompt) {
   static char line[MAXLINE]; /* `readline` is clearly not reentrant! */
 
-  write(STDOUT_FILENO, prompt, strlen(prompt));
+  Write(STDOUT_FILENO, prompt, strlen(prompt));
 
   line[0] = '\0';
 
