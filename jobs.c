@@ -33,33 +33,15 @@ static void sigchld_handler(int sig) {
       continue;
     for (int p = 0; p < j->nproc; p++) {
       pid = waitpid(j->proc[p].pid, &status, WNOHANG | WUNTRACED | WCONTINUED);
-      //   safe_printf("sigchild handler, job %d, searched pid %d, got pid
-      //   %d\n", i,
-      //               j->pgid, pid);
       if (pid <= 0)
         continue;
       if (WIFSTOPPED(status)) {
-        // safe_printf("[%d] stopped\n", j->pgid);
         j->state = STOPPED;
         j->proc[p].state = STOPPED;
       } else if (WIFCONTINUED(status)) {
-        // safe_printf("[%d] resumed\n", j->pgid);
         j->state = RUNNING;
         j->proc[p].state = RUNNING;
-      } else if (WIFEXITED(status) /*|| WIFSIGNALED(status)*/) {
-        // safe_printf("[%d] exited '%s', status=%d\n", i, j->command,
-        //             WEXITSTATUS(status));
-        j->proc[p].state = FINISHED;
-        j->proc[p].exitcode = status;
-        int done = 0;
-        for (int k = 0; k < j->nproc; k++)
-          if (j->proc[k].state == FINISHED)
-            done++;
-        if (done == j->nproc)
-          j->state = FINISHED;
-      } else if (WIFSIGNALED(status)) {
-        // safe_printf("[%d] killed '%s' by signal %d\n", i, j->command,
-        //             WTERMSIG(status));
+      } else if (WIFEXITED(status) || WIFSIGNALED(status)) {
         j->proc[p].state = FINISHED;
         j->proc[p].exitcode = status;
         int done = 0;
@@ -197,14 +179,12 @@ bool resumejob(int j, int bg, sigset_t *mask) {
     for (int i = 0; i < jobs[j].nproc; i++)
       jobs[j].proc[i].state = RUNNING;
     Kill(-jobs[j].pgid, SIGCONT);
-    // safe_printf("[%d] resumed (bg)\n", jobs[j].pgid);
   } else {
     if (jobs[FG].pgid != 0) {
       Tcgetattr(tty_fd, &jobs[FG].tmodes);
       int nj = addjob(0, true);
       movejob(0, nj);
       Kill(-jobs[nj].pgid, SIGSTOP);
-      //   safe_printf("fg job stopped\n");
     }
     movejob(j, FG);
     deljob(&jobs[j]);
@@ -214,7 +194,6 @@ bool resumejob(int j, int bg, sigset_t *mask) {
     Tcsetpgrp(tty_fd, jobs[FG].pgid);
     Tcsetattr(tty_fd, TCSADRAIN, &jobs[FG].tmodes);
     Kill(-jobs[FG].pgid, SIGCONT);
-    // safe_printf("[%d] resumed (fg)\n", jobs[0].pgid);
     monitorjob(mask);
   }
   (void)movejob;
@@ -277,11 +256,9 @@ int monitorjob(sigset_t *mask) {
 #ifdef STUDENT
   Tcsetpgrp(tty_fd, jobs[0].pgid);
   do {
-    // safe_printf("xd\n");
     Sigsuspend(mask);
     state = jobstate(0, &exitcode);
     if (jobs[0].state == STOPPED) {
-      //   safe_printf("fg stopped");
       Tcgetattr(tty_fd, &jobs[0].tmodes);
       int j = addjob(0, true);
       movejob(0, j);
@@ -338,11 +315,8 @@ void shutdownjobs(void) {
 #ifdef STUDENT
   for (int i = 0; i < njobmax; i++) {
     if (jobs[i].pgid > 0 && jobs[i].state != FINISHED) {
-      //   safe_printf("trying to kill %d\n", jobs[i].pgid);
       killjob(i);
       Sigsuspend(&mask);
-      //   safe_printf("killed %d\n", jobs[i].pgid);
-      //   deljob(&jobs[i]);
     }
   }
 #endif /* !STUDENT */
