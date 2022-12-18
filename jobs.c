@@ -273,7 +273,6 @@ int monitorjob(sigset_t *mask) {
 
   /* TODO: Following code requires use of Tcsetpgrp of tty_fd. */
 #ifdef STUDENT
-
   job_t *fj = &jobs[0];
   int wstatus;
   while (fj->state == RUNNING) {
@@ -289,7 +288,6 @@ int monitorjob(sigset_t *mask) {
       int j = addjob(0, true);
       movejob(0, j);
       state = jobstate(j, &exitcode);
-
       break;
     }
     if (WIFEXITED(wstatus)) {
@@ -305,7 +303,6 @@ int monitorjob(sigset_t *mask) {
       }
       if (done == fj->nproc)
         fj->state = FINISHED;
-      // deljob(fj);
       state = jobstate(0, &exitcode);
     }
     if (WIFSIGNALED(wstatus)) {
@@ -321,7 +318,6 @@ int monitorjob(sigset_t *mask) {
       }
       if (done == fj->nproc)
         fj->state = FINISHED;
-      // deljob(fj);
       state = jobstate(0, &exitcode);
     }
   }
