@@ -58,15 +58,15 @@ static void sigchld_handler(int sig) {
         if (done == j->nproc)
           j->state = FINISHED;
       }
-    //    else if (WIFSIGNALED(status)) {
-    //     //   safe_printf("[%d] terminated by signal %d\n", j->pgid,
-    //     //   WTERMSIG(status));
-    //     //   safe_printf("[%d] killed '%s' by signal %d\n", i, j->command,
-    //     //   WTERMSIG(status));
-    //     j->state = FINISHED;
-    //     j->proc[p].state = FINISHED;
-    //     j->proc[p].exitcode = status;
-    //   }
+      //    else if (WIFSIGNALED(status)) {
+      //     //   safe_printf("[%d] terminated by signal %d\n", j->pgid,
+      //     //   WTERMSIG(status));
+      //     //   safe_printf("[%d] killed '%s' by signal %d\n", i, j->command,
+      //     //   WTERMSIG(status));
+      //     j->state = FINISHED;
+      //     j->proc[p].state = FINISHED;
+      //     j->proc[p].exitcode = status;
+      //   }
     }
   }
   (void)status;
