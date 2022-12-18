@@ -83,12 +83,6 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     setpgid(getpid(), getpid());
     if (!bg)
       setfgpgrp(getpid());
-    // sigset_t mask2, sigint_mask;
-    // sigemptyset(&sigint_mask);
-    // sigaddset(&sigint_mask, SIGINT);
-    // Sigprocmask(SIG_BLOCK, &sigint_mask, &mask2);
-    // Sigsuspend(&mask2);
-
     // reset signal actions
     Sigprocmask(SIG_SETMASK, &mask, NULL);
     Signal(SIGINT, SIG_DFL);
